@@ -32,7 +32,7 @@ const messageQueueJob = {
     project_id: "6789",
     project_name: "test",
     build_no: "1",
-    tokens: ["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"],
+    tokens: ["token"],
     configurations: {
         branch: "master",
         root_dir: "",
