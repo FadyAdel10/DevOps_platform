@@ -16,7 +16,6 @@
     
     then retutn message to another instance of queue, do not forget to sent also all build logs
 */
-
 import Docker from 'dockerode';
 
 /**
@@ -28,117 +27,111 @@ const docker = new Docker();
 /**
  * Represents a job in the message queue that contains project details, repository link, build commands, and other metadata.
  * @type {Object}
- * @property {string} projectId - The ID of the project.
- * @property {string} projectName - The name of the project.
- * @property {string} buildNumber - The build number associated with this job.
- * @property {Array<string>} tokens - Authentication tokens for accessing the repository.
- * @property {Object} projectData - Metadata related to the project (GitHub branch, root directory, etc.).
- * @property {string} githubLink - The URL to the GitHub repository.
  */
 const messageQueueJob = {
-    projectId: "6789", 
-    projectName: "test",
-    buildNumber: "1", 
-    tokens: ["github_token"], 
-    projectData: {
-      githubBranch: "master", 
-      rootDirectory: "", 
-      buildCommand: "npm run build", 
-      outputDirectory: "build", 
-      environmentVariables: {
-        PUBLIC_URL: "https://client-project.cloudastro.com", 
-      },
+    project_id: "6789",
+    project_name: "test",
+    build_no: "1",
+    tokens: ["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"],
+    configurations: {
+        branch: "master",
+        root_dir: "",
+        build_command: "npm run build",
+        out_dir: "dist",
+        env_vars: {
+            PUBLIC_URL: "https://client-project.cloudastro.com",
+        },
     },
-    githubLink: "https://github.com/FadyAdel10/simple_react_app_private.git", 
+    repo_url: "https://github.com/FadyAdel10/simple_vite_app_private_2.git",
 };
 
 /**
  * Flags for build and output directory checks.
- * @type {number}
  */
-let building_framework_flag = 0;
-let output_directory_flag = 0;
+let building_framework_flag = false;
+let output_directory_flag = false;
 
 // Check if a build command exists in the job data.
-if (messageQueueJob.projectData.buildCommand) {
-    building_framework_flag = 1;
+if (messageQueueJob.configurations.build_command) {
+    building_framework_flag = true;
 }
 
 // Check if an output directory is defined.
-if (messageQueueJob.projectData.outputDirectory !== undefined) {
-    output_directory_flag = 1;
+if (messageQueueJob.configurations.out_dir) {
+    output_directory_flag = true;
 }
 
 /**
  * Checks if the specified Docker image is available locally.
  * 
  * @param {string} imageName - The name of the Docker image to check.
- * @returns {Promise<boolean>} - A promise that resolves to `true` if the image exists locally, otherwise `false`.
+ * @returns {Promise<boolean>} - Resolves to `true` if the image exists locally, otherwise `false`.
  */
-const isImageAvailable = async (imageName) => {
+const isDockerImageAvailable = async (imageName) => {
     const images = await docker.listImages();
     return images.some(image => image.RepoTags && image.RepoTags.includes(imageName));
 };
 
 /**
- * Runs a Docker container based on the specified configuration, clones the repository into the container, installs dependencies, 
- * runs the build command (if defined), and starts the application.
+ * Runs a Docker container to clone a repository, install dependencies, optionally build the project,
+ * and start the application.
  */
 const runDockerContainer = async () => {
     try {
         const imageName = 'node:18-buster';
 
-        // Check if the specified Docker image is available locally.
+        // Check if the Docker image is available locally.
         console.log(`Checking if the image ${imageName} exists locally...`);
-        const imageExists = await isImageAvailable(imageName);
+        const imageExists = await isDockerImageAvailable(imageName);
 
         if (!imageExists) {
-            console.log("fady image is not found");
+            console.log(`${imageName} is not found locally.`);
         } else {
             console.log(`${imageName} found locally.`);
         }
-        
-        // Paths for mounting volumes between host and container
-        const host_path = '/home/fady/projects';
-        const container_path = '/usr/src/app';
 
-        // Start the container using the 'node' image.
+        // Paths for mounting volumes between host and container
+        const hostPath = '/home/fady/projects';
+        const containerPath = '/usr/src/app';
+
+        // Create a Docker container
         console.log('Creating container...');
         const container = await docker.createContainer({
             Image: imageName,
-            name: messageQueueJob.projectName, // Name for the container
+            name: messageQueueJob.project_name,
             Cmd: ['/bin/bash', '-c', `
-                # If the directory is empty, clone the repository
-                if [ ! "$(ls -A /usr/src/app)" ]; then
-                    git clone -b ${messageQueueJob.projectData.githubBranch} https://${messageQueueJob.tokens[0]}@github.com/${messageQueueJob.githubLink.split('github.com/')[1]} ${container_path};
+                # Clone the repository if the directory is empty
+                if [ ! "$(ls -A ${containerPath})" ]; then
+                    git clone -b ${messageQueueJob.configurations.branch} https://${messageQueueJob.tokens[0]}@github.com/${messageQueueJob.repo_url.split('github.com/')[1]} ${containerPath};
                 fi &&
-                
+
                 # Navigate to the project root directory
-                cd /usr/src/app/${messageQueueJob.projectData.rootDirectory} &&
+                cd ${containerPath}/${messageQueueJob.configurations.root_dir} &&
 
-                # Install dependencies using npm
-                npm install &&
+                # Install dependencies only if package.json exists
+                if [ -f "package.json" ]; then
+                    npm install;
+                fi &&
 
-                # If there's a build command, run it
-                if [ ${building_framework_flag} -eq 1 ]; then
-                    ${messageQueueJob.projectData.buildCommand}; 
-                fi && 
+                # Run the build command if defined
+                ${building_framework_flag ? `${messageQueueJob.configurations.build_command} &&` : ''}
 
-                # Start the application
-                npm run start
-            `], // Command to run inside the container
+                # Keep the container running
+                tail -f /dev/null
+            `],
             Tty: true,
+            Env: Object.entries(messageQueueJob.configurations.env_vars).map(([key, value]) => `${key}=${value}`),
             HostConfig: {
                 Binds: [
                     // Bind mount a host directory to the container's directory
-                    `${host_path}:${container_path}/${messageQueueJob.projectData.rootDirectory}`
-                ]
-            }
+                    `${hostPath}:${containerPath}/${messageQueueJob.configurations.root_dir}`,
+                ],
+            },
         });
 
         console.log('Container created with ID:', container.id);
 
-        // Start the container
+        // Start the Docker container
         await container.start();
         console.log('Container started successfully');
 
@@ -147,9 +140,13 @@ const runDockerContainer = async () => {
     }
 };
 
-// Call the function to start the Docker container
+// Execute the Docker container workflow
 runDockerContainer();
 
 
 //remove docker container
 
+// docker.getExec(){
+//     here execute commands like:
+//     if()
+// }
