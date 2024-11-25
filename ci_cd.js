@@ -24,7 +24,7 @@ import 'dotenv/config';
  * @property {string} githubLink - The URL to the GitHub repository.
  */
 const messageQueueJob = {
-  projectId: "6787",
+  projectId: "6757",
   projectName: "test",
   buildNumber: "1",
   tokens: ["github_token"],
@@ -39,8 +39,6 @@ const messageQueueJob = {
   },
   githubLink: "https://github.com/FadyAdel10/simple_react_app_private.git",
 };
-
-const GITHUB_REPO_URL = messageQueueJob.githubLink;
 
 // Initialize Jenkins client
 const jenkins = new Jenkins({
