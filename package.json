@@ -1,0 +1,20 @@
+{
+  "name": "platform",
+  "version": "1.0.0",
+  "main": "worker.js",
+  "type": "module",
+  "scripts": {
+    "start": "nodemon worker.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  },
+  "dependencies": {
+    "@azure/storage-blob": "^12.26.0",
+    "dockerode": "^4.0.2",
+    "dotenv": "^16.4.5"
+  }
+}
