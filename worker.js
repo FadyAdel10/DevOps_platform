@@ -42,7 +42,7 @@ const messageQueueJob = {
             PUBLIC_URL: "https://client-project.cloudastro.com",
         },
     },
-    repo_url: "https://github.com/FadyAdel10/simple_vite_app_private_2.git",
+    repo_url: "link",
 };
 
 /**
