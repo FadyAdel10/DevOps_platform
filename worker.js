@@ -18,6 +18,9 @@
 */
 import Docker from 'dockerode';
 import createProjectFolder from './handle_deployed_projects.js';
+import fs from "fs";
+import path from "path";
+import deploy from './azure.js';
 import { config } from "dotenv";
 
 config();
@@ -112,38 +115,6 @@ const runDockerContainer = async () => {
         const container = await docker.createContainer({
             Image: imageName,
             name: messageQueueJob.project_name,
-            
-            // Cmd: ['/bin/bash', '-c', `
-            //     # Check if the directory is empty and clone the repo
-            //     if [ ! "$(ls -A ${temporary_path})" ]; then
-            //         echo "Cloning repository...";
-            //         git clone -b ${messageQueueJob.configurations.branch} ${messageQueueJob.repo_url} ${temporary_path};
-            //     fi &&
-            
-            //     # Navigate to the project root directory
-            //     cd ${temporary_path}/${messageQueueJob.configurations.root_dir} &&
-            
-            //     # Check and print environment variables
-            //     echo "Testing environment variables..." &&
-            //     printenv | grep PUBLIC_URL || echo "PUBLIC_URL not found." &&
-            
-            //     # Install dependencies if package.json exists
-            //     if [ -f "package.json" ]; then
-            //         npm install;
-            //     fi &&
-            
-            //     # Run build command if specified
-            //     ${building_framework_flag ? `${messageQueueJob.configurations.build_command} &&` : ''}
-                
-            //     # Navigate to the project output directory that is in root directory
-            //     cd ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir} &&
-
-                
-            //     cp -r ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir} ${containerPath} &&
-            //     echo ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir}
-            //     # Keep the container running
-            //     tail -f /dev/null
-            // `],
             Cmd: [
                 '/bin/bash',
                 '-c',
@@ -177,7 +148,11 @@ const runDockerContainer = async () => {
                     echo "Output directory not specified, copying from root directory...";
                     cp -r ${temporary_path}/${messageQueueJob.configurations.root_dir}/* ${containerPath};
                 fi &&
-            
+                # Debugging: Check paths and write to file
+                echo "Creating finished.txt..." > ${containerPath}/finished.txt &&
+
+                ls -l ${containerPath} &&
+                echo "Operation completed"
                 # Keep the container running
                 tail -f /dev/null
                 `,
@@ -204,7 +179,47 @@ const runDockerContainer = async () => {
 };
 
 // Execute the Docker container workflow
-runDockerContainer();
+await runDockerContainer();
+
+
+
+
+const finishedFilePath = path.join(process.env.HOST_PATH, 'finished.txt');
+
+// Busy-wait function to check for file existence
+const waitForFinishedFile = async () => {
+    const timeout = 1000 * 60 * 5; // 5 minutes timeout
+    const interval = 1000 * 2; // check every 2 seconds
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeout) {
+        try {
+            await fs.promises.access(finishedFilePath, fs.constants.F_OK);
+            console.log('Finished file detected.');
+            return true; // File found
+        } catch (err) {
+            console.log('Waiting for finished.txt...');
+            await new Promise(resolve => setTimeout(resolve, interval)); // Wait for a short time before checking again
+        }
+    }
+
+    console.error('Timeout reached, finished.txt not found.');
+    return false; // Timeout reached without finding the file
+};
+// Wait for finished.txt to appear
+const fileFound = await waitForFinishedFile();
+if (fileFound) {
+    console.log('Proceeding with deployment...');
+    deploy(messageQueueJob.project_name, process.env.HOST_PATH);
+}
+
+
+
+
+
+
+
+//deploy(messageQueueJob.configurations.project_name,process.env.HOST_PATH);
 
 export { messageQueueJob } ;
 //remove docker container
