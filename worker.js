@@ -17,7 +17,10 @@
     then retutn message to another instance of queue, do not forget to sent also all build logs
 */
 import Docker from 'dockerode';
+import createProjectFolder from './handle_deployed_projects.js';
+import { config } from "dotenv";
 
+config();
 /**
  * Initialize Docker client using the default socket.
  * @type {Docker}
@@ -32,18 +35,23 @@ const messageQueueJob = {
     project_id: "6789",
     project_name: "test",
     build_no: "1",
-    tokens: ["github_token"], 
+    tokens: ["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"],
     configurations: {
-        branch: "master",
+        branch: "main",
         root_dir: "",
-        build_command: "npm run build",
+        build_command: undefined/*"npm run build"*/,
         out_dir: "dist",
         env_vars: {
             PUBLIC_URL: "https://client-project.cloudastro.com",
         },
     },
-    repo_url: "link",
+    repo_url: "https://github.com/FadyAdel10/Template2.git",
 };
+
+
+// Call the function to create the project folder once
+//let host_project_path = createProjectFolder();
+//console.log('Project folder path:', host_project_path);
 
 /**
  * Flags for build and output directory checks.
@@ -61,6 +69,7 @@ if (messageQueueJob.configurations.out_dir) {
     output_directory_flag = true;
 }
 
+
 /**
  * Checks if the specified Docker image is available locally.
  * 
@@ -71,6 +80,10 @@ const isDockerImageAvailable = async (imageName) => {
     const images = await docker.listImages();
     return images.some(image => image.RepoTags && image.RepoTags.includes(imageName));
 };
+
+// Prepare environment variables
+const environmentVariables = Object.entries(messageQueueJob.configurations.env_vars)
+.map(([key, value]) => `${key}=${value}`);
 
 /**
  * Runs a Docker container to clone a repository, install dependencies, optionally build the project,
@@ -91,36 +104,40 @@ const runDockerContainer = async () => {
         }
 
         // Paths for mounting volumes between host and container
-        const hostPath = '/home/fady/projects';
+        const hostPath = process.env.HOST_PATH//`${process.env.HOST_PATH}`; /*createProjectFolder();*/
         const containerPath = '/usr/src/app';
-
         // Create a Docker container
         console.log('Creating container...');
         const container = await docker.createContainer({
             Image: imageName,
             name: messageQueueJob.project_name,
             Cmd: ['/bin/bash', '-c', `
-                # Clone the repository if the directory is empty
+                # Check if the directory is empty and clone the repo
                 if [ ! "$(ls -A ${containerPath})" ]; then
-                    git clone -b ${messageQueueJob.configurations.branch} https://${messageQueueJob.tokens[0]}@github.com/${messageQueueJob.repo_url.split('github.com/')[1]} ${containerPath};
+                    echo "Cloning repository...";
+                    git clone -b ${messageQueueJob.configurations.branch} ${messageQueueJob.repo_url} ${containerPath};
                 fi &&
-
+            
                 # Navigate to the project root directory
                 cd ${containerPath}/${messageQueueJob.configurations.root_dir} &&
-
-                # Install dependencies only if package.json exists
+            
+                # Check and print environment variables
+                echo "Testing environment variables..." &&
+                printenv | grep PUBLIC_URL || echo "PUBLIC_URL not found." &&
+            
+                # Install dependencies if package.json exists
                 if [ -f "package.json" ]; then
                     npm install;
                 fi &&
-
-                # Run the build command if defined
+            
+                # Run build command if specified
                 ${building_framework_flag ? `${messageQueueJob.configurations.build_command} &&` : ''}
-
+            
                 # Keep the container running
                 tail -f /dev/null
             `],
             Tty: true,
-            Env: Object.entries(messageQueueJob.configurations.env_vars).map(([key, value]) => `${key}=${value}`),
+            Env: environmentVariables,
             HostConfig: {
                 Binds: [
                     // Bind mount a host directory to the container's directory
@@ -143,10 +160,6 @@ const runDockerContainer = async () => {
 // Execute the Docker container workflow
 runDockerContainer();
 
-
+export { messageQueueJob } ;
 //remove docker container
 
-// docker.getExec(){
-//     here execute commands like:
-//     if()
-// }
