@@ -37,15 +37,15 @@ const messageQueueJob = {
     build_no: "1",
     tokens: ["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"],
     configurations: {
-        branch: "main",
-        root_dir: "",
-        build_command: undefined/*"npm run build"*/,
+        branch: "master",
+        root_dir: "my-vite-app",
+        build_command:  "npm run build",
         out_dir: "dist",
         env_vars: {
             PUBLIC_URL: "https://client-project.cloudastro.com",
         },
     },
-    repo_url: "https://github.com/FadyAdel10/Template2.git",
+    repo_url: "https://github.com/FadyAdel10/simple_vite_app_private.git",
 };
 
 
@@ -104,22 +104,58 @@ const runDockerContainer = async () => {
         }
 
         // Paths for mounting volumes between host and container
-        const hostPath = process.env.HOST_PATH//`${process.env.HOST_PATH}`; /*createProjectFolder();*/
+        const hostPath =  process.env.HOST_PATH /*createProjectFolder();*/
         const containerPath = '/usr/src/app';
+        const temporary_path = '/temp' ; 
         // Create a Docker container
         console.log('Creating container...');
         const container = await docker.createContainer({
             Image: imageName,
             name: messageQueueJob.project_name,
-            Cmd: ['/bin/bash', '-c', `
-                # Check if the directory is empty and clone the repo
-                if [ ! "$(ls -A ${containerPath})" ]; then
-                    echo "Cloning repository...";
-                    git clone -b ${messageQueueJob.configurations.branch} ${messageQueueJob.repo_url} ${containerPath};
-                fi &&
             
+            // Cmd: ['/bin/bash', '-c', `
+            //     # Check if the directory is empty and clone the repo
+            //     if [ ! "$(ls -A ${temporary_path})" ]; then
+            //         echo "Cloning repository...";
+            //         git clone -b ${messageQueueJob.configurations.branch} ${messageQueueJob.repo_url} ${temporary_path};
+            //     fi &&
+            
+            //     # Navigate to the project root directory
+            //     cd ${temporary_path}/${messageQueueJob.configurations.root_dir} &&
+            
+            //     # Check and print environment variables
+            //     echo "Testing environment variables..." &&
+            //     printenv | grep PUBLIC_URL || echo "PUBLIC_URL not found." &&
+            
+            //     # Install dependencies if package.json exists
+            //     if [ -f "package.json" ]; then
+            //         npm install;
+            //     fi &&
+            
+            //     # Run build command if specified
+            //     ${building_framework_flag ? `${messageQueueJob.configurations.build_command} &&` : ''}
+                
+            //     # Navigate to the project output directory that is in root directory
+            //     cd ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir} &&
+
+                
+            //     cp -r ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir} ${containerPath} &&
+            //     echo ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir}
+            //     # Keep the container running
+            //     tail -f /dev/null
+            // `],
+            Cmd: [
+                '/bin/bash',
+                '-c',
+                `
+                # Clone the repo if the directory is empty
+                if [ ! "$(ls -A ${temporary_path})" ]; then
+                    echo "Cloning repository...";
+                    git clone -b ${messageQueueJob.configurations.branch} ${messageQueueJob.repo_url} ${temporary_path};
+                fi &&
+                
                 # Navigate to the project root directory
-                cd ${containerPath}/${messageQueueJob.configurations.root_dir} &&
+                cd ${temporary_path}/${messageQueueJob.configurations.root_dir} &&
             
                 # Check and print environment variables
                 echo "Testing environment variables..." &&
@@ -130,18 +166,28 @@ const runDockerContainer = async () => {
                     npm install;
                 fi &&
             
-                # Run build command if specified
+                # Run the build command if specified
                 ${building_framework_flag ? `${messageQueueJob.configurations.build_command} &&` : ''}
+            
+                # Copy files to the container path based on whether out_dir is empty
+                if [ -n "${messageQueueJob.configurations.out_dir}" ]; then
+                    echo "Copying from output directory...";
+                    cp -r ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir} ${containerPath} ;
+                else
+                    echo "Output directory not specified, copying from root directory...";
+                    cp -r ${temporary_path}/${messageQueueJob.configurations.root_dir}/* ${containerPath};
+                fi &&
             
                 # Keep the container running
                 tail -f /dev/null
-            `],
+                `,
+            ],
             Tty: true,
             Env: environmentVariables,
             HostConfig: {
                 Binds: [
                     // Bind mount a host directory to the container's directory
-                    `${hostPath}:${containerPath}/${messageQueueJob.configurations.root_dir}`,
+                    `${hostPath}:${containerPath}`,
                 ],
             },
         });
