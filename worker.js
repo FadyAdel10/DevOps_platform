@@ -20,6 +20,7 @@ import Docker from 'dockerode';
 import createProjectFolder from './handle_deployed_projects.js';
 import { config } from "dotenv";
 
+console.log("env_name: ",process.env.name);
 config();
 /**
  * Initialize Docker client using the default socket.
@@ -32,20 +33,21 @@ const docker = new Docker();
  * @type {Object}
  */
 const messageQueueJob = {
-    project_id: "6789",
+    project_id: "6786",
     project_name: "test",
     build_no: "1",
     tokens: ["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"],
     configurations: {
-        branch: "main",
-        root_dir: "",
-        build_command: undefined/*"npm run build"*/,
-        out_dir: "dist",
+        branch: "master",
+        root_dir: "my-vite-app",
+        build_command: "npm run build",
+        out_dir: "",
         env_vars: {
             PUBLIC_URL: "https://client-project.cloudastro.com",
+            PUBLIC_URL2: "https://client-project.cloudastro.com"
         },
     },
-    repo_url: "https://github.com/FadyAdel10/Template2.git",
+    repo_url: "https://github.com/FadyAdel10/simple_vite_app_private.git",
 };
 
 
@@ -85,6 +87,16 @@ const isDockerImageAvailable = async (imageName) => {
 const environmentVariables = Object.entries(messageQueueJob.configurations.env_vars)
 .map(([key, value]) => `${key}=${value}`);
 
+// concat env_variables to the build command
+let buildCommand = "";
+Object.keys(messageQueueJob.configurations.env_vars).forEach(key=>{
+    buildCommand += `${key}=$${key} `
+});
+buildCommand += messageQueueJob.configurations.build_command;
+
+console.log(buildCommand);
+
+
 /**
  * Runs a Docker container to clone a repository, install dependencies, optionally build the project,
  * and start the application.
@@ -104,13 +116,14 @@ const runDockerContainer = async () => {
         }
 
         // Paths for mounting volumes between host and container
-        const hostPath = process.env.HOST_PATH//`${process.env.HOST_PATH}`; /*createProjectFolder();*/
+        const hostPath = process.env.HOST_PATH + `/${messageQueueJob.project_name}${messageQueueJob.project_id}` //`${process.env.HOST_PATH}`; /*createProjectFolder();*/
         const containerPath = '/usr/src/app';
+        const bindingDir = '/usr/src/buildDir';
         // Create a Docker container
         console.log('Creating container...');
         const container = await docker.createContainer({
             Image: imageName,
-            name: messageQueueJob.project_name,
+            name: messageQueueJob.project_name + messageQueueJob.project_id,
             Cmd: ['/bin/bash', '-c', `
                 # Check if the directory is empty and clone the repo
                 if [ ! "$(ls -A ${containerPath})" ]; then
@@ -128,10 +141,17 @@ const runDockerContainer = async () => {
                 # Install dependencies if package.json exists
                 if [ -f "package.json" ]; then
                     npm install;
-                fi &&
+                fi &&   
             
                 # Run build command if specified
                 ${building_framework_flag ? `${messageQueueJob.configurations.build_command} &&` : ''}
+
+                # check the build files (ls -a)
+                echo "Checking for build files: "
+                ls -a
+
+                # copy build files to the binding directory
+                ${output_directory_flag ? `cp -r ./${messageQueueJob.configurations.out_dir} ${bindingDir} &&`:`cp -r * ${bindingDir}`}
             
                 # Keep the container running
                 tail -f /dev/null
@@ -141,7 +161,7 @@ const runDockerContainer = async () => {
             HostConfig: {
                 Binds: [
                     // Bind mount a host directory to the container's directory
-                    `${hostPath}:${containerPath}/${messageQueueJob.configurations.root_dir}`,
+                    `${hostPath}:${bindingDir}`,
                 ],
             },
         });
