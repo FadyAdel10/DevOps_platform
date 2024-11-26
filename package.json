@@ -15,6 +15,7 @@
   "dependencies": {
     "@azure/storage-blob": "^12.26.0",
     "dockerode": "^4.0.2",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "mime-types": "^2.1.35"
   }
 }

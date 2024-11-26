@@ -33,20 +33,18 @@ async function emptyContainer(containerName) {
 }
 
 async function uploadFilesFromDirectory(containerName, directoryPath, basePath) {
-  const files = fs.readdirSync(directoryPath);
+  const files = fs.readdirSync(directoryPath, {
+    withFileTypes: true,
+    recursive: true
+  }).filter(item => item.isFile());
 
   for (const file of files) {
-    const filePath = path.join(directoryPath, file);
+    const filePath = path.join(file.parentPath, file.name);
     const relativePath = path.relative(basePath, filePath);
-
-    if (fs.lstatSync(filePath).isDirectory()) {
-      await uploadFilesFromDirectory(containerName, filePath, basePath);
-    } else {
-      const blobName = relativePath;
-      await uploadFileToContainer(containerName, blobName, filePath);
-    }
-
+    const blobName = relativePath;
+    await uploadFileToContainer(containerName, blobName, filePath);
   }
+  console.log("Files uploaded successfully!")
 }
 
 async function uploadFileToContainer(containerName, blobName, filePath) {
@@ -68,11 +66,12 @@ export const AzureService = {
   createContainer,
   doesContainerExist,
   uploadFilesFromDirectory,
-  emptyContainer
+  emptyContainer,
+  deploy
 }
 
-async function testAzure() {
-  const containerName = "project1";
+
+async function deploy(containerName, directoryPath) {
   console.log("Checking if container exists...")
 
   if (await AzureService.doesContainerExist(containerName)) {
@@ -83,13 +82,11 @@ async function testAzure() {
     console.log("Creating container...")
     await AzureService.createContainer(containerName)
   }
-  const testDirectoryPath = "/Users/abdelrahman/projects/learn_html"
-  await AzureService.uploadFilesFromDirectory(containerName, testDirectoryPath, testDirectoryPath)
-  console.log(`Uploaded files to ${containerName}`)
+  console.log("Starting uploading files...")
+  await AzureService.uploadFilesFromDirectory(containerName, directoryPath, directoryPath)
+  console.log(`Uploaded files to ${containerName}!`)
 }
 
-
-testAzure();
 
 
 
