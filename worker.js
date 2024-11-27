@@ -19,6 +19,10 @@
 import Docker from 'dockerode';
 import createProjectFolder from './handle_deployed_projects.js';
 import { config } from "dotenv";
+import { AzureService } from './azure.js';
+import path from "path";
+import fs from "fs";
+import process from 'process';
 
 config();
 /**
@@ -38,16 +42,22 @@ const messageQueueJob = {
     tokens: ["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"],
     configurations: {
         branch: "master",
-        root_dir: "my-vite-app",
+        root_dir: "",
         build_command:  "npm run build",
-        out_dir: "dist",
+        out_dir: "build",
         env_vars: {
             PUBLIC_URL: "https://client-project.cloudastro.com",
         },
     },
-    repo_url: "https://github.com/FadyAdel10/simple_vite_app_private.git",
+    repo_url: "https://github.com/FadyAdel10/simple_react_app_private",
 };
 
+// Set PUBLIC_URL to container
+// TODO: change last part (project_name -> container_name) [when implemented in backend]
+const setPublicURL = (messageQueueJob) => {
+    messageQueueJob.configurations.env_vars.PUBLIC_URL = `https://${process.env.AZURE_STORAGE_CONNECTION_STRING.match(/AccountName=([^;]+)/)?.[1]}.blob.core.windows.net/${messageQueueJob.project_name}`
+    console.log(`Setting PULIC_URL to ${messageQueueJob.configurations.env_vars.PUBLIC_URL}`)
+}
 
 // Call the function to create the project folder once
 //let host_project_path = createProjectFolder();
@@ -69,6 +79,10 @@ if (messageQueueJob.configurations.out_dir) {
     output_directory_flag = true;
 }
 
+// Check if project is Vite (out_dir == dist) and modify build command accordingly
+if (messageQueueJob.configurations.out_dir === 'dist') {
+    messageQueueJob.configurations.build_command = messageQueueJob.configurations.build_command + ' -- --base=./'
+}
 
 /**
  * Checks if the specified Docker image is available locally.
@@ -82,6 +96,8 @@ const isDockerImageAvailable = async (imageName) => {
 };
 
 // Prepare environment variables
+// Set environment variable PUBLIC_URL to point at container 
+setPublicURL(messageQueueJob);
 const environmentVariables = Object.entries(messageQueueJob.configurations.env_vars)
 .map(([key, value]) => `${key}=${value}`);
 
@@ -112,38 +128,6 @@ const runDockerContainer = async () => {
         const container = await docker.createContainer({
             Image: imageName,
             name: messageQueueJob.project_name,
-            
-            // Cmd: ['/bin/bash', '-c', `
-            //     # Check if the directory is empty and clone the repo
-            //     if [ ! "$(ls -A ${temporary_path})" ]; then
-            //         echo "Cloning repository...";
-            //         git clone -b ${messageQueueJob.configurations.branch} ${messageQueueJob.repo_url} ${temporary_path};
-            //     fi &&
-            
-            //     # Navigate to the project root directory
-            //     cd ${temporary_path}/${messageQueueJob.configurations.root_dir} &&
-            
-            //     # Check and print environment variables
-            //     echo "Testing environment variables..." &&
-            //     printenv | grep PUBLIC_URL || echo "PUBLIC_URL not found." &&
-            
-            //     # Install dependencies if package.json exists
-            //     if [ -f "package.json" ]; then
-            //         npm install;
-            //     fi &&
-            
-            //     # Run build command if specified
-            //     ${building_framework_flag ? `${messageQueueJob.configurations.build_command} &&` : ''}
-                
-            //     # Navigate to the project output directory that is in root directory
-            //     cd ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir} &&
-
-                
-            //     cp -r ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir} ${containerPath} &&
-            //     echo ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir}
-            //     # Keep the container running
-            //     tail -f /dev/null
-            // `],
             Cmd: [
                 '/bin/bash',
                 '-c',
@@ -172,12 +156,15 @@ const runDockerContainer = async () => {
                 # Copy files to the container path based on whether out_dir is empty
                 if [ -n "${messageQueueJob.configurations.out_dir}" ]; then
                     echo "Copying from output directory...";
-                    cp -r ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir} ${containerPath} ;
+                    cp -r ${temporary_path}/${messageQueueJob.configurations.root_dir}/${messageQueueJob.configurations.out_dir}/* ${containerPath} ;
                 else
                     echo "Output directory not specified, copying from root directory...";
                     cp -r ${temporary_path}/${messageQueueJob.configurations.root_dir}/* ${containerPath};
                 fi &&
             
+                # Debugging: Check paths and write to file
+                touch ${containerPath}/finished.txt &&
+
                 # Keep the container running
                 tail -f /dev/null
                 `,
@@ -203,8 +190,43 @@ const runDockerContainer = async () => {
     }
 };
 
+
 // Execute the Docker container workflow
-runDockerContainer();
+await runDockerContainer();
+
+// git clone callback Workaround
+const finishedFilePath = path.join(process.env.HOST_PATH, 'finished.txt');
+
+// Busy-wait function to check for file existence
+const waitForFinishedFile = async () => {
+    const timeout = 1000 * 60 * 5; // 5 minutes timeout
+    const interval = 1000 * 2; // check every 2 seconds
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeout) {
+        try {
+            await fs.promises.access(finishedFilePath, fs.constants.F_OK);
+            console.log('\x1b[32m%s\x1b[0m','Finished file detected.');
+            fs.rmSync(finishedFilePath);
+            return true; // File found
+        } catch (err) {
+            console.log('Waiting for finished.txt...');
+            await new Promise(resolve => setTimeout(resolve, interval)); // Wait for a short time before checking again
+        }
+    }
+
+    console.error('Timeout reached, finished.txt not found.');
+    return false; // Timeout reached without finding the file
+};
+// Wait for finished.txt to appear
+const fileFound = await waitForFinishedFile();
+if (fileFound) {
+    console.log('Proceeding with deployment...');
+    AzureService.deploy(messageQueueJob.project_name, process.env.HOST_PATH);
+}
+
+// Deploy to Azure Blob Storage
+//AzureService.deploy(messageQueueJob.project_name, process.env.HOST_PATH)
 
 export { messageQueueJob } ;
 //remove docker container

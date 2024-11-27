@@ -1,0 +1,52 @@
+# Vite project
+const messageQueueJob = {
+    project_id: "6789",
+    project_name: "test",
+    build_no: "1",
+    tokens: ["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"],
+    configurations: {
+        branch: "master",
+        root_dir: "my-vite-app",
+        build_command:  "npm run build",
+        out_dir: "dist",
+        env_vars: {
+            PUBLIC_URL: "https://client-project.cloudastro.com",
+        },
+    },
+    repo_url: "https://github.com/FadyAdel10/simple_vite_app_private.git",
+};
+
+# HTML/CSS project
+const messageQueueJob = {
+    project_id: "6789",
+    project_name: "test",
+    build_no: "1",
+    tokens: ["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"],
+    configurations: {
+        branch: "main",
+        root_dir: "",
+        build_command: undefined/*"npm run build"*/,
+        out_dir: "",
+        env_vars: {
+            PUBLIC_URL: "https://client-project.cloudastro.com",
+        },
+    },
+    repo_url: "https://github.com/FadyAdel10/Template2.git",
+};
+# React App
+const messageQueueJob = {
+    project_id: "6789",
+    project_name: "test",
+    build_no: "1",
+    tokens: ["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"],
+    configurations: {
+        branch: "master",
+        root_dir: "",
+        build_command: "npm run build",
+        out_dir: "build",
+        env_vars: {
+            PUBLIC_URL: "https://client-project.cloudastro.com",
+        },
+    },
+    repo_url: "https://github.com/andrewagain/emoji-search.git",
+};
