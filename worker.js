@@ -19,6 +19,7 @@
 import Docker from 'dockerode';
 import createProjectFolder from './handle_deployed_projects.js';
 import { config } from "dotenv";
+import { dockerExec } from './dockerExec.js';
 
 console.log("env_name: ",process.env.name);
 config();
@@ -34,20 +35,20 @@ const docker = new Docker();
  */
 
 const messageQueueJob = {
-    project_id: "6785",
+    project_id: "6786",
     project_name: "test",
     build_no: "1",
     tokens: ["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"],
     configurations: {
-        branch: "main",
-        root_dir: "",
-        build_command: undefined/*"npm run build"*/,
-        out_dir: "",
+        branch: "master",
+        root_dir: "my-vite-app",
+        build_command: "npm run build",
+        out_dir: "dist",
         env_vars: {
             PUBLIC_URL: "https://client-project.cloudastro.com",
         },
     },
-    repo_url: "https://github.com/FadyAdel10/Template2.git",
+    repo_url: "https://github.com/FadyAdel10/simple_vite_app_private.git",
 };
 
 
@@ -175,45 +176,80 @@ const runDockerContainer = async () => {
             if [ ! "$(ls -A ${containerPath})" ]; then
                 echo "Cloning repository...";
                 git clone -b ${messageQueueJob.configurations.branch} ${messageQueueJob.repo_url} ${containerPath};
-            fi`
+            fi && 
+            # Navigate to the project root directory
+            cd ${containerPath}/${messageQueueJob.configurations.root_dir}`
         ];
+
+        // const cloneCMD = ['git', 'clone', '-b', repoUrl, targetDir];
 
         // Start the Docker container
         await container.start();
         console.log('Container started successfully');
 
+        dockerExec(container,0);
+
+        // const cloneExec = await container.exec({
+        //     cmd: cloneCMD,
+        //     AttachStdout: true,
+        //     AttachStderr: true
+        // });
+
+        // const cloneStream = await cloneExec.start({});
+
+        // cloneStream.on('data', (data) => {
+        //     console.log(data.toString()); // Print output from the container
+        // });
+
+        // cloneStream.on('error', (error) => {
+        //     console.error(error.message); // Print output from the container
+        // });
+
+        // cloneStream.on('end', async () => {
+        //     console.log("Clone ended"); // Print output from the container
+        //      // Check the exit code
+        //     const result = await cloneExec.inspect();
+        //     if (result.ExitCode !== 0) {
+        //         console.error(`Command failed with exit code ${result.ExitCode}`);
+        //     } else {
+        //         console.log('Command executed successfully.');
+        //     }
+        // });
+
         // Exec commands in the container container
-        const exec = await container.exec({
-            cmd: cmd,
-            // AttachStdin: true,
-            AttachStdout: true,
-            AttachStderr: true
-        })
+        // const exec = await container.exec({
+        //     cmd: cloneCMD,
+        //     // AttachStdin: true,
+        //     AttachStdout: true,
+        //     AttachStderr: true
+        // })
 
         // start logs streaming 
-        const stream = await exec.start({});
+        // const stream = await exec.start({});
 
-        stream.on("data",(data)=>{  // when new output
-            logs += data.toString();
-            console.log(data.toString())
-        })
+        // stream.on("data",(data)=>{  // when new output
+        //     logs += data.toString();
+        //     console.log(data.toString())
+        // })
 
-        stream.on("error", (err)=>{
-            console.error("error in stream:", err)
-        })
+        // stream.on("error", (err)=>{
+        //     console.error("error in stream:", err)
+        // })
 
-        stream.on("end",()=>{ 
-            console.log("End of stream.");
-            console.log(logs);
-            // deploy()
-        })
+        // stream.on("end",async ()=>{ 
+        //     console.log("End of stream.");
+        //     console.log(logs);
 
-        const result = await exec.inspect();
-        console.error(`Command exited with code ${result.ExitCode}`);
+        //     const result = await exec.inspect();
+        //     console.error(`Command exited with code ${result.ExitCode}`);
+        //     // deploy()
+        // })
+
+        
         // if (result.ExitCode !== 0) {
         // }    
 
-        console.log('Container created with ID:', container.id);
+        // console.log('Container created with ID:', container.id);
 
         
 
