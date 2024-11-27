@@ -19,7 +19,7 @@
 import Docker from 'dockerode';
 import createProjectFolder from './handle_deployed_projects.js';
 import { config } from "dotenv";
-import { dockerExec } from './dockerExec.js';
+import { dockerExecMain } from './dockerExec.js';
 
 console.log("env_name: ",process.env.name);
 config();
@@ -50,7 +50,6 @@ const messageQueueJob = {
     },
     repo_url: "https://github.com/FadyAdel10/simple_vite_app_private.git",
 };
-
 
 // Call the function to create the project folder once
 //let host_project_path = createProjectFolder();
@@ -187,7 +186,8 @@ const runDockerContainer = async () => {
         await container.start();
         console.log('Container started successfully');
 
-        dockerExec(container,0);
+        // dockerExec(container,0);
+        dockerExecMain(container,messageQueueJob, building_framework_flag, output_directory_flag, containerPath, bindingDir)
 
         // const cloneExec = await container.exec({
         //     cmd: cloneCMD,
