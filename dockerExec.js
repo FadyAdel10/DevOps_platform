@@ -37,7 +37,7 @@ export const dockerExecMain = (container,messageQueueJob, building_framework_fla
     const dockerExec = async (container,i)=>{
         if(i >= commands.length) {
             // deploy()
-            console.log(logs)
+            console.log(cumLogs)
             return 1;
         }
         let cmd = ['/bin/bash', '-c'];
